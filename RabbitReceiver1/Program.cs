@@ -1,4 +1,5 @@
 ﻿using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
 using System.Text;
 
 ConnectionFactory factory = new();
@@ -17,11 +18,25 @@ channel.ExchangeDeclare(exchangeName, ExchangeType.Direct);
 channel.QueueDeclare(queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
 channel.QueueBind(queueName, exchangeName, routingKey, arguments: null);
 
-//Encode the message
-byte[] messageBodyBytes = Encoding.UTF8.GetBytes("Hello World");
+channel.BasicQos(prefetchSize: 0, prefetchCount: 1, global: false);
 
-//Publish the message
-channel.BasicPublish(exchangeName,routingKey,basicProperties:null, messageBodyBytes);
+var consumer = new EventingBasicConsumer(channel);
+consumer.Received += (sender, args) =>
+{
+    var body = args.Body.ToArray();
+
+    string message = Encoding.UTF8.GetString(body);
+
+    Console.WriteLine($"Message received: {message}");
+
+    channel.BasicAck(args.DeliveryTag, multiple: false);
+};
+
+string consumerTag = channel.BasicConsume(queueName, autoAck: false, consumer);
+
+Console.ReadLine();
+
+channel.BasicCancel(consumerTag);
 
 channel.Close();
 cnn.Close();
